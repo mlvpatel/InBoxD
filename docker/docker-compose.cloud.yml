@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  n8n:
+    image: n8nio/n8n:1.70.3
+    container_name: inboxd-n8n-cloud
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    env_file:
+      - ../.env
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL}
+
+volumes:
+  n8n_data:
+    driver: local

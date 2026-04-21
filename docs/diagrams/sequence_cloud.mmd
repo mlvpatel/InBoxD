@@ -1,0 +1,35 @@
+sequenceDiagram
+    participant OL as Microsoft Outlook
+    participant N8N as n8n Engine
+    participant OAI as OpenAI API
+    participant EXCEL as OneDrive Excel
+
+    OL->>N8N: New email (poll trigger)
+    rect rgb(225, 245, 254)
+    N8N->>N8N: Dedup check (static data)
+    N8N->>N8N: Strip HTML and thread history
+    end
+    N8N->>OAI: Stage 1 - Classify (gpt-4o-mini)
+    OAI-->>N8N: JSON {intent, product_name, ...}
+    N8N->>N8N: Parse JSON, route by intent
+    alt Delivery_Tracking
+        N8N->>EXCEL: Load Inventory sheet
+        EXCEL-->>N8N: Inventory rows
+        N8N->>EXCEL: Load Active_Deliveries sheet
+        EXCEL-->>N8N: Delivery rows
+    else Inventory intent
+        N8N->>EXCEL: Load Inventory sheet
+        EXCEL-->>N8N: Inventory rows
+    end
+    rect rgb(225, 245, 254)
+    N8N->>N8N: Match product (exact/substring)
+    N8N->>N8N: Compose data packet
+    end
+    N8N->>OAI: Stage 2 - Draft reply (gpt-4o-mini)
+    OAI-->>N8N: Draft text
+    rect rgb(225, 245, 254)
+    N8N->>N8N: Scrub formatting
+    N8N->>N8N: Compose subject
+    end
+    N8N->>OL: Create draft reply
+    N8N->>N8N: Mark message processed

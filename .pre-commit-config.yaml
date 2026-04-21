@@ -1,0 +1,14 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: validate-workflow-json
+        name: Validate workflow JSON
+        entry: python3 -c "import json; json.load(open('workflows/cloud/workflow.json')); json.load(open('workflows/local/workflow.json')); print('Workflow JSON valid')"
+        language: system
+        pass_filenames: false
+        always_run: true

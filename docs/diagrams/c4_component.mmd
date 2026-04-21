@@ -1,0 +1,51 @@
+flowchart TD
+    classDef system fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000;
+
+    subgraph n8n["n8n Workflow Engine"]
+        subgraph ingestion["Email Ingestion"]
+            N1(["Outlook Trigger\n(Node 1)"])
+            N2["Dedup\n(Node 2)"]
+            N3["Thread Stripper\n(Node 3)"]
+        end
+
+        subgraph classification["Classification"]
+            N4["Extract and Classify\nStage 1 (Node 4)"]
+            N4B["Parse Stage 1 JSON\n(Node 4b)"]
+        end
+
+        subgraph routing["Routing"]
+            N5{"Route by Intent\n(Node 5)"}
+        end
+
+        subgraph retrieval["Data Retrieval"]
+            N6A[("Load Inventory\n(Node 6a)")]
+            N6B[("Load Deliveries\n(Node 6b)")]
+            N7["Matcher\n(Node 7)"]
+            N7U["Unknown Packet\n(Node 7u)"]
+        end
+
+        subgraph generation["Response Generation"]
+            N8["Compose Data Packet\n(Node 8)"]
+            N9["Draft Reply\nStage 2 (Node 9)"]
+            N10["Scrub Format\n(Node 10)"]
+            N11["Compose Subject\n(Node 11)"]
+        end
+
+        subgraph output["Output"]
+            N12["Create Outlook Draft\n(Node 12)"]
+            N13["Mark Processed\n(Node 13)"]
+        end
+    end
+
+    N1 --> N2 --> N3 --> N4 --> N4B --> N5
+    N5 -->|"unknown"| N7U
+    N5 -->|"Delivery_Tracking"| N6A
+    N5 -->|"Delivery_Tracking"| N6B
+    N5 -->|"Inventory intents"| N6A
+    N6A --> N7
+    N6B --> N7
+    N7 --> N8
+    N7U --> N8
+    N8 --> N9 --> N10 --> N11 --> N12 --> N13
+
+    class N1,N2,N3,N4,N4B,N5,N6A,N6B,N7,N7U,N8,N9,N10,N11,N12,N13 system;

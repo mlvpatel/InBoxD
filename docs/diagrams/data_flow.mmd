@@ -1,0 +1,45 @@
+flowchart LR
+    classDef input fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
+    classDef process fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000;
+    classDef data fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
+    classDef output fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000;
+
+    subgraph phase_input["Input"]
+        EMAIL[/"Raw Email\n(HTML + thread history)"/]
+    end
+
+    subgraph phase_stage1["Stage 1: Extract"]
+        STRIP["Stripped Body\n(plain text, latest message only)"]
+        CLASSIFY["Classification\n{intent, product_name,\ncustomer_name, language}"]
+    end
+
+    subgraph phase_data["Data Retrieval"]
+        INVENTORY[("Inventory Sheet\n(50 rows, 8 columns)")]
+        DELIVERIES[("Active_Deliveries Sheet\n(60 rows, 6 columns)")]
+        MATCH["Matched Product\n(exact / substring / embedding)"]
+    end
+
+    subgraph phase_stage2["Stage 2: Draft"]
+        PACKET["Data Packet\n(intent-specific fields only)"]
+        DRAFT["Draft Reply\n(plain text, target language)"]
+    end
+
+    subgraph phase_output["Output"]
+        SCRUBBED["Scrubbed Draft\n(no markdown artifacts)"]
+        OUTLOOK_DRAFT[/"Outlook Draft\n(Re: subject, HTML pre)"/]
+        LOG[/"Structured Log Entry\n{timestamp, intent, route, ...}"/]
+    end
+
+    EMAIL --> STRIP --> CLASSIFY
+    CLASSIFY -->|"route by intent"| INVENTORY
+    CLASSIFY -->|"Delivery_Tracking"| DELIVERIES
+    INVENTORY --> MATCH
+    DELIVERIES --> MATCH
+    MATCH --> PACKET --> DRAFT
+    DRAFT --> SCRUBBED --> OUTLOOK_DRAFT
+    OUTLOOK_DRAFT --> LOG
+
+    class EMAIL input;
+    class STRIP,CLASSIFY,MATCH,PACKET,DRAFT,SCRUBBED process;
+    class INVENTORY,DELIVERIES data;
+    class OUTLOOK_DRAFT,LOG output;

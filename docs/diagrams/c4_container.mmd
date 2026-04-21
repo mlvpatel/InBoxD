@@ -1,0 +1,30 @@
+flowchart TD
+    classDef system fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000;
+    classDef external fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
+    classDef db fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
+    classDef llm fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000;
+
+    subgraph system_context["InBoxD"]
+        N8N["n8n Workflow Engine\n(Docker Container)\nPort 5678"]
+    end
+
+    subgraph external_context["External Services"]
+        OUTLOOK["Microsoft Outlook\n(Email via Graph API)"]
+        OPENAI["OpenAI API\n(gpt-4o-mini)\n(Cloud Variant)"]
+        OLLAMA["Ollama\n(qwen2.5:7b-instruct)\n(Local Variant)"]
+        ONEDRIVE[("OneDrive Excel\n(Microsoft Graph API)\n(Cloud Variant)")]
+        LOCALXL[("Local Excel File\n(.xlsx on filesystem)\n(Local Variant)")]
+        QDRANT[("Qdrant\n(Vector DB)\n(Local Variant)")]
+    end
+
+    N8N -->|"OAuth2 / Graph API"| OUTLOOK
+    N8N -->|"REST API"| OPENAI
+    N8N -->|"REST API"| OLLAMA
+    N8N -->|"Graph API"| ONEDRIVE
+    N8N -->|"File Read"| LOCALXL
+    N8N -->|"REST API"| QDRANT
+
+    class N8N system;
+    class OUTLOOK external;
+    class OPENAI,OLLAMA llm;
+    class ONEDRIVE,LOCALXL,QDRANT db;

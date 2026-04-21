@@ -1,0 +1,31 @@
+flowchart TD
+    classDef system fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000;
+    classDef external fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
+    classDef db fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
+    classDef llm fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000;
+
+    N1(["1. Outlook Trigger"]) --> N2["2. Dedup"]
+    N2 --> N3["3. Thread Stripper"]
+    N3 --> N4["4. Extract and Classify\n(Ollama qwen2.5:7b)"]
+    N4 --> N4B["4b. Parse Stage 1 JSON"]
+    N4B --> N5{"5. Route by Intent"}
+    N5 -->|"Output 0: unknown"| N7U["7u. Unknown Packet"]
+    N5 -->|"Output 1: Delivery_Tracking"| N6AR["6a-read. Read Inventory Binary"]
+    N5 -->|"Output 1: Delivery_Tracking"| N6BR["6b-read. Read Deliveries Binary"]
+    N5 -->|"Output 2: Inventory intents"| N6AR
+    N6AR --> N6A[("6a. Load Inventory\n(Spreadsheet File)")]
+    N6BR --> N6B[("6b. Load Deliveries\n(Spreadsheet File)")]
+    N6A --> N7["7. Matcher\n(exact + substring + embedding)"]
+    N6B --> N7
+    N7 --> N8["8. Compose Data Packet"]
+    N7U --> N8
+    N8 --> N9["9. Draft Reply\n(Ollama qwen2.5:7b)"]
+    N9 --> N10["10. Scrub Format"]
+    N10 --> N11["11. Compose Subject"]
+    N11 --> N12["12. Create Outlook Draft"]
+    N12 --> N13(["13. Mark Processed"])
+
+    class N1,N12,N13 external;
+    class N2,N3,N4B,N5,N6AR,N6BR,N7,N7U,N8,N10,N11 system;
+    class N6A,N6B db;
+    class N4,N9 llm;

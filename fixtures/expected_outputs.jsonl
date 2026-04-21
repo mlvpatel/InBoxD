@@ -1,0 +1,16 @@
+{"id": 1, "intent": "Availability_Status", "product_name": "TechPro Chair 350X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 2, "intent": "Availability_Status", "product_name": "Nexis Router 463X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 3, "intent": "Quantity_Inquiry", "product_name": "ErgoLine Chair 928X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 4, "intent": "Quantity_Inquiry", "product_name": "TechPro Workstation 532X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 5, "intent": "Incoming_Stock", "product_name": "ErgoLine Chair 949X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 6, "intent": "Incoming_Stock", "product_name": "Nexis Desk 881X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 7, "intent": "Pricing_Request", "product_name": "TechPro Laptop 303X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 8, "intent": "Pricing_Request", "product_name": "ErgoLine Docking Station 275X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 9, "intent": "Delivery_Tracking", "product_name": "TechPro Laptop 303X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 10, "intent": "Delivery_Tracking", "product_name": "TechPro Laptop 303X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 11, "intent": "Availability_Status", "product_name": "TekPro Cher 350X", "route": "not_found_draft", "match_tier": "none"}
+{"id": 12, "intent": "Pricing_Request", "product_name": "Nexis Router 463X", "route": "high_confidence", "match_tier": "exact"}
+{"id": 13, "intent": "Availability_Status", "product_name": "QuantumFlux Accelerator 9000", "route": "not_found_draft", "match_tier": "none"}
+{"id": 14, "intent": "Availability_Status", "product_name": "ErgoLine", "route": "high_confidence", "match_tier": "substring"}
+{"id": 15, "intent": "unknown", "product_name": null, "route": "clarification_draft", "match_tier": "none"}
+{"id": 16, "intent": "unknown", "product_name": null, "route": "clarification_draft", "match_tier": "none"}

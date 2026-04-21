@@ -1,0 +1,44 @@
+sequenceDiagram
+    participant OL as Microsoft Outlook
+    participant N8N as n8n Engine
+    participant OLLAMA as Ollama
+    participant FS as Local Filesystem
+    participant QD as Qdrant
+
+    OL->>N8N: New email (poll trigger)
+    rect rgb(225, 245, 254)
+    N8N->>N8N: Dedup check (static data)
+    N8N->>N8N: Strip HTML and thread history
+    end
+    N8N->>OLLAMA: Stage 1 - Classify (qwen2.5:7b-instruct)
+    OLLAMA-->>N8N: JSON {intent, product_name, ...}
+    N8N->>N8N: Parse JSON, route by intent
+    N8N->>FS: Read Excel binary file
+    FS-->>N8N: Binary data
+    N8N->>N8N: Parse spreadsheet (Inventory / Deliveries)
+    N8N->>N8N: Match product (Tier 1: exact)
+    alt Exact match found
+        N8N->>N8N: Use exact match
+    else No exact match
+        N8N->>N8N: Match product (Tier 2: substring)
+        alt Substring match found
+            N8N->>N8N: Use substring match
+        else No substring match
+            N8N->>OLLAMA: Embed query (bge-m3)
+            OLLAMA-->>N8N: Query vector
+            N8N->>QD: Search inventory_products
+            QD-->>N8N: Top results with scores
+            N8N->>N8N: Check score >= 0.82 and gap >= 0.05
+        end
+    end
+    rect rgb(225, 245, 254)
+    N8N->>N8N: Compose data packet
+    end
+    N8N->>OLLAMA: Stage 2 - Draft reply (qwen2.5:7b-instruct)
+    OLLAMA-->>N8N: Draft text
+    rect rgb(225, 245, 254)
+    N8N->>N8N: Scrub formatting
+    N8N->>N8N: Compose subject
+    end
+    N8N->>OL: Create draft reply
+    N8N->>N8N: Mark message processed

@@ -1,0 +1,32 @@
+flowchart TD
+    classDef system fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000;
+    classDef external fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
+    classDef db fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
+    classDef llm fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000;
+
+    subgraph boundary["System Context"]
+        direction TB
+        SENDER["Email Sender\n(Vendor/Customer)"]
+        SYSTEM["InBoxD\n(n8n Workflow)"]
+        OUTLOOK["Microsoft Outlook\n(Email Service)"]
+        LLM["LLM Provider\n(OpenAI / Ollama)"]
+        EXCEL[("Excel Database\n(OneDrive / Local File)")]
+        QDRANT[("Qdrant Vector DB\n(Local Variant Only)")]
+    end
+
+    SENDER -->|"sends inquiry email"| OUTLOOK
+    OUTLOOK -->|"delivers new message"| SYSTEM
+    SYSTEM -->|"classifies and extracts intent"| LLM
+    LLM -->|"returns structured classification"| SYSTEM
+    SYSTEM -->|"queries product data"| EXCEL
+    EXCEL -->|"returns inventory/delivery rows"| SYSTEM
+    SYSTEM -->|"generates draft reply"| LLM
+    LLM -->|"returns draft text"| SYSTEM
+    SYSTEM -->|"creates draft reply"| OUTLOOK
+    SYSTEM -.->|"embedding search (local only)"| QDRANT
+    QDRANT -.->|"returns similar products"| SYSTEM
+
+    class SYSTEM system;
+    class SENDER,OUTLOOK external;
+    class EXCEL,QDRANT db;
+    class LLM llm;

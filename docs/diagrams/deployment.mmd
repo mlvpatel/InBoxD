@@ -1,0 +1,50 @@
+flowchart TD
+    classDef system fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000;
+    classDef external fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
+    classDef db fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
+    classDef llm fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000;
+
+    subgraph cloud_deploy["Cloud Deployment"]
+        direction TB
+        DOCKER_C["Docker Desktop"]
+        N8N_C["n8n Container\n(n8nio/n8n:1.70.3)\nPort 5678"]
+        NGROK["ngrok\n(Reserved Domain)\nHTTPS Tunnel"]
+        DOCKER_C --> N8N_C
+        NGROK -->|"proxy"| N8N_C
+    end
+
+    subgraph cloud_ext["Cloud External Services"]
+        OUTLOOK_C["Microsoft Outlook\n(Graph API)"]
+        OPENAI["OpenAI API\n(gpt-4o-mini)"]
+        ONEDRIVE[("OneDrive Excel\n(Graph API)")]
+    end
+
+    N8N_C -->|"OAuth2"| OUTLOOK_C
+    N8N_C -->|"REST"| OPENAI
+    N8N_C -->|"REST"| ONEDRIVE
+
+    subgraph local_deploy["Local Deployment"]
+        direction TB
+        DOCKER_L["Docker Desktop"]
+        subgraph bridge["Bridge Network: inboxd"]
+            N8N_L["n8n Container\n(n8nio/n8n:1.70.3)\nPort 5678"]
+            OLLAMA_D["Ollama Container\n(ollama/ollama:0.5.4)\nPort 11434"]
+            QDRANT_D[("Qdrant Container\n(qdrant/qdrant:v1.13.2)\nPort 6333")]
+        end
+        DOCKER_L --> bridge
+    end
+
+    subgraph local_ext["Local External Services"]
+        OUTLOOK_L["Microsoft Outlook\n(Graph API)"]
+        LOCALFS[("Local Filesystem\n(Excel + Data)")]
+    end
+
+    N8N_L -->|"HTTP"| OLLAMA_D
+    N8N_L -->|"HTTP"| QDRANT_D
+    N8N_L -->|"OAuth2"| OUTLOOK_L
+    N8N_L -->|"File Read"| LOCALFS
+
+    class N8N_C,N8N_L system;
+    class OUTLOOK_C,OUTLOOK_L,NGROK,DOCKER_C,DOCKER_L external;
+    class ONEDRIVE,LOCALFS,QDRANT_D db;
+    class OPENAI,OLLAMA_D llm;

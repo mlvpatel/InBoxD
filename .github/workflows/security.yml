@@ -1,0 +1,16 @@
+name: Security Scan
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run security pre-flight scan
+        run: chmod +x scripts/security-scan.sh && ./scripts/security-scan.sh
