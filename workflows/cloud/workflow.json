@@ -69,7 +69,7 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.4,
       "position": [
-        910,
+        1550,
         300
       ]
     },
@@ -87,7 +87,7 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [
-        930,
+        1570,
         500
       ],
       "credentials": {
@@ -106,7 +106,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1130,
+        1770,
         300
       ]
     },
@@ -135,28 +135,6 @@
               },
               "renameOutput": true,
               "outputKey": "Unknown"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.intent }}",
-                    "rightValue": "Delivery_Tracking",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Delivery"
             },
             {
               "conditions": {
@@ -197,12 +175,20 @@
                       "type": "string",
                       "operation": "equals"
                     }
+                  },
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "Delivery_Tracking",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
                   }
                 ],
                 "combinator": "or"
               },
               "renameOutput": true,
-              "outputKey": "Inventory"
+              "outputKey": "Classify"
             }
           ]
         },
@@ -215,7 +201,7 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        1350,
+        1990,
         300
       ]
     },
@@ -241,8 +227,8 @@
       "type": "n8n-nodes-base.microsoftExcel",
       "typeVersion": 2,
       "position": [
-        1600,
-        200
+        1110,
+        300
       ]
     },
     {
@@ -267,22 +253,22 @@
       "type": "n8n-nodes-base.microsoftExcel",
       "typeVersion": 2,
       "position": [
-        1600,
-        450
+        1330,
+        300
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// ============================================================\n// MATCHER - Deterministic database lookup\n// ============================================================\n// Two-tier matching (exact normalized, then bidirectional substring).\n// Fails closed to route='not_found_draft' when no match found.\n// NEVER fuzzy/vector match - the strict enterprise rule is zero hallucination.\n// ============================================================\n\nconst classificationData = $('Parse Stage 1 JSON').first().json;\nconst intent = classificationData.intent;\nconst productQuery = (classificationData.product_name || '').toLowerCase().trim();\nconst customerQuery = (classificationData.customer_name || '').toLowerCase().trim();\n\nlet inventoryItems = [];\ntry { inventoryItems = $('Load Inventory').all().map(i => i.json); } catch(e) {}\n\nlet deliveryItems = [];\ntry { deliveryItems = $('Load Deliveries').all().map(i => i.json); } catch(e) {}\n\nif (!productQuery) {\n  return [{ json: { ...classificationData, route: 'clarification_draft', matchedProduct: null, matchedDelivery: null, match_tier: 'none' } }];\n}\n\n// Tier 1: exact normalized\nlet matchedProduct = inventoryItems.find(p => (p.Product_Name || '').toLowerCase().trim() === productQuery);\nlet matchTier = matchedProduct ? 'exact' : null;\n\n// Tier 2: bidirectional substring\nif (!matchedProduct) {\n  matchedProduct = inventoryItems.find(p => {\n    const name = (p.Product_Name || '').toLowerCase().trim();\n    return name.includes(productQuery) || productQuery.includes(name);\n  });\n  matchTier = matchedProduct ? 'substring' : null;\n}\n\nif (!matchedProduct) {\n  return [{ json: { ...classificationData, route: 'not_found_draft', matchedProduct: null, matchedDelivery: null, match_tier: 'none' } }];\n}\n\n// Delivery lookup for Delivery_Tracking intent\nlet matchedDelivery = null;\nif (intent === 'Delivery_Tracking') {\n  const productName = (matchedProduct.Product_Name || '').toLowerCase().trim();\n  matchedDelivery = deliveryItems.find(d => {\n    const dProduct = (d.Product_Name || '').toLowerCase().trim();\n    const dCustomer = (d.Customer_Name || '').toLowerCase().trim();\n    return (dProduct === productName || dProduct.includes(productQuery) || productQuery.includes(dProduct)) &&\n           (!customerQuery || dCustomer === customerQuery || dCustomer.includes(customerQuery) || customerQuery.includes(dCustomer));\n  });\n  if (!matchedDelivery) {\n    return [{ json: { ...classificationData, route: 'not_found_draft', matchedProduct, matchedDelivery: null, match_tier: matchTier } }];\n  }\n}\n\nreturn [{ json: { ...classificationData, route: 'high_confidence', matchedProduct, matchedDelivery, match_tier: matchTier } }];\n"
+        "jsCode": "// ============================================================\n// MATCHER - Deterministic database lookup\n// ============================================================\n// Two-tier matching: Exact normalized -> Bidirectional substring.\n// AMBIGUITY GUARD (Fix): If multiple substring candidates exist,\n// return clarification_draft instead of picking the wrong one.\n// This eliminates false-positive matches that appeared as hallucination.\n// ============================================================\n\nconst mode = \"runOnceForAllItems\";\nconst classificationData = $('Parse Stage 1 JSON').first().json;\nconst intent = classificationData.intent;\nconst productQuery = (classificationData.product_name || '').toLowerCase().trim();\nconst customerQuery = (classificationData.customer_name || '').toLowerCase().trim();\n\nlet inventoryItems = [];\ntry { inventoryItems = $('Load Inventory').all().map(i => i.json); } catch(e) {\n  console.log('[Matcher] Load Inventory not available: ' + e.message);\n}\n\nlet deliveryItems = [];\ntry { deliveryItems = $('Load Deliveries').all().map(i => i.json); } catch(e) {\n  console.log('[Matcher] Load Deliveries not available: ' + e.message);\n}\n\nif (!productQuery) {\n  return [{ json: { ...classificationData, route: 'clarification_draft', matchedProduct: null, matchedDelivery: null, match_tier: 'none' } }];\n}\n\n// Tier 1: exact normalized - always unambiguous\nlet matchedProduct = inventoryItems.find(p => (p.Product_Name || '').toLowerCase().trim() === productQuery);\nlet matchTier = matchedProduct ? 'exact' : null;\n\n// Tier 2: bidirectional substring - collect ALL matches, guard against ambiguity\nif (!matchedProduct) {\n  const candidates = inventoryItems.filter(p => {\n    const name = (p.Product_Name || '').toLowerCase().trim();\n    return name.includes(productQuery) || productQuery.includes(name);\n  });\n\n  if (candidates.length === 1) {\n    matchedProduct = candidates[0];\n    matchTier = 'substring';\n  } else if (candidates.length > 1) {\n    console.log('[Matcher] Ambiguous: ' + candidates.length + ' candidates for \"' + productQuery + '\": ' + candidates.map(c => c.Product_Name).join(', '));\n    return [{ json: { ...classificationData, route: 'clarification_draft', matchedProduct: null, matchedDelivery: null, match_tier: 'ambiguous' } }];\n  }\n}\n\nif (!matchedProduct) {\n  return [{ json: { ...classificationData, route: 'not_found_draft', matchedProduct: null, matchedDelivery: null, match_tier: 'none' } }];\n}\n\n// Delivery lookup for Delivery_Tracking intent\nlet matchedDelivery = null;\nif (intent === 'Delivery_Tracking') {\n  const productName = (matchedProduct.Product_Name || '').toLowerCase().trim();\n  matchedDelivery = deliveryItems.find(d => {\n    const dProduct  = (d.Product_Name  || '').toLowerCase().trim();\n    const dCustomer = (d.Customer_Name || '').toLowerCase().trim();\n    return (dProduct === productName || dProduct.includes(productQuery) || productQuery.includes(dProduct)) &&\n           (!customerQuery || dCustomer === customerQuery || dCustomer.includes(customerQuery) || customerQuery.includes(dCustomer));\n  });\n  if (!matchedDelivery) {\n    return [{ json: { ...classificationData, route: 'not_found_draft', matchedProduct, matchedDelivery: null, match_tier: matchTier } }];\n  }\n}\n\nreturn [{ json: { ...classificationData, route: 'high_confidence', matchedProduct, matchedDelivery, match_tier: matchTier } }];\n"
       },
       "id": "node-7",
       "name": "Matcher",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1850,
-        300
+        2210,
+        200
       ]
     },
     {
@@ -294,21 +280,21 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1850,
-        550
+        2210,
+        450
       ]
     },
     {
       "parameters": {
-        "jsCode": "// ============================================================\n// COMPOSE DATA PACKET - Strict field allowlist + personalization\n// ============================================================\n// Builds the `data` object with ONLY the fields the drafter is\n// permitted to cite for the given intent. This is a hard boundary -\n// the Stage 2 LLM never sees Discount_Pct, Category, internal SKU etc.\n//\n// Also extracts sender_first_name deterministically (not via LLM) so\n// the drafter has a clean personalization value and never needs to\n// emit [Sender Name] placeholders.\n// ============================================================\n\nconst item = $input.first().json;\nconst { route, intent, matchedProduct, matchedDelivery } = item;\n\nfunction extractFirstName(name, email) {\n  if (name && typeof name === 'string') {\n    let n = name.replace(/[<>\"]/g, '').trim();\n    if (n.includes('@')) n = n.split('@')[0];\n    n = n.replace(/[._-]+/g, ' ').trim();\n    if (n.length > 0) {\n      const first = n.split(/\\s+/)[0];\n      return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();\n    }\n  }\n  if (email) {\n    const local = email.split('@')[0].replace(/[._-]+/g, ' ').trim();\n    const first = local.split(/\\s+/)[0];\n    if (first) return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();\n  }\n  return '';\n}\nconst senderFirstName = extractFirstName(item.senderName, item.senderEmail);\n\nlet data = {};\nif (route === 'high_confidence' && matchedProduct) {\n  switch (intent) {\n    case 'Availability_Status':\n      data = {\n        product_name: matchedProduct.Product_Name,\n        stock_status: matchedProduct.Stock_Status,\n        next_arrival_date: matchedProduct.Next_Arrival_Date || null\n      };\n      break;\n    case 'Quantity_Inquiry':\n      data = {\n        product_name: matchedProduct.Product_Name,\n        stock_quantity: matchedProduct.Stock_Quantity,\n        stock_status: matchedProduct.Stock_Status\n      };\n      break;\n    case 'Incoming_Stock':\n      data = {\n        product_name: matchedProduct.Product_Name,\n        next_arrival_date: matchedProduct.Next_Arrival_Date || null,\n        stock_status: matchedProduct.Stock_Status\n      };\n      break;\n    case 'Pricing_Request':\n      data = {\n        product_name: matchedProduct.Product_Name,\n        unit_price: matchedProduct.Unit_Price\n      };\n      break;\n    case 'Delivery_Tracking':\n      data = {\n        product_name: matchedProduct.Product_Name,\n        order_id: matchedDelivery ? matchedDelivery.Order_ID : null,\n        customer_name: matchedDelivery ? matchedDelivery.Customer_Name : null,\n        quantity: matchedDelivery ? matchedDelivery.Quantity : null,\n        delivery_eta: matchedDelivery ? matchedDelivery.Delivery_ETA : null,\n        status: matchedDelivery ? matchedDelivery.Status : null\n      };\n      break;\n  }\n}\n\nreturn [{\n  json: {\n    route,\n    intent,\n    language: item.language || 'en',\n    data,\n    sender_first_name: senderFirstName,\n    senderEmail: item.senderEmail,\n    senderName: item.senderName,\n    originalSubject: item.originalSubject,\n    internetMessageId: item.internetMessageId,\n    messageId: item.messageId,\n    strippedBody: item.strippedBody,\n    confidence: item.confidence,\n    match_tier: item.match_tier\n  }\n}];\n"
+        "jsCode": "// ============================================================\n// COMPOSE DATA PACKET - Strict field allowlist + fixes\n// ============================================================\n// Fix A: Unit_Price always formatted as float string \"354.24\"\n//        (prevents LLM writing \"EUR 341\" instead of \"EUR 341.00\")\n// Fix B: Next_Arrival_Date that is in the past is nulled out\n//        (prevents LLM citing a stale past date as a future arrival)\n// ============================================================\n\nconst item = $input.first().json;\nconst { route, intent, matchedProduct, matchedDelivery } = item;\n\nfunction extractFirstName(name, email) {\n  if (name && typeof name === 'string') {\n    let n = name.replace(/[<>\"]/g, '').trim();\n    if (n.includes('@')) n = n.split('@')[0];\n    n = n.replace(/[._-]+/g, ' ').trim();\n    if (n.length > 0) {\n      const first = n.split(/\\s+/)[0];\n      return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();\n    }\n  }\n  if (email) {\n    const local = email.split('@')[0].replace(/[._-]+/g, ' ').trim();\n    const first = local.split(/\\s+/)[0];\n    if (first) return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();\n  }\n  return '';\n}\nconst senderFirstName = extractFirstName(item.senderName, item.senderEmail);\n\n// Fix B: Return null if date is today or earlier\nfunction futureDate(dateStr) {\n  if (!dateStr) return null;\n  const today = new Date().toISOString().slice(0, 10);\n  return dateStr > today ? dateStr : null;\n}\n\n// Fix A: Always format price as \"354.24\" string\nfunction formatPrice(val) {\n  if (val === null || val === undefined) return null;\n  return parseFloat(val).toFixed(2);\n}\n\nlet data = {};\nif (route === 'high_confidence' && matchedProduct) {\n  switch (intent) {\n    case 'Availability_Status':\n      data = {\n        product_name:       matchedProduct.Product_Name,\n        stock_status:       matchedProduct.Stock_Status,\n        next_arrival_date:  futureDate(matchedProduct.Next_Arrival_Date)\n      };\n      break;\n    case 'Quantity_Inquiry':\n      data = {\n        product_name:    matchedProduct.Product_Name,\n        stock_quantity:  matchedProduct.Stock_Quantity,\n        stock_status:    matchedProduct.Stock_Status\n      };\n      break;\n    case 'Incoming_Stock':\n      data = {\n        product_name:      matchedProduct.Product_Name,\n        next_arrival_date: futureDate(matchedProduct.Next_Arrival_Date),\n        stock_status:      matchedProduct.Stock_Status\n      };\n      break;\n    case 'Pricing_Request':\n      data = {\n        product_name: matchedProduct.Product_Name,\n        unit_price:   formatPrice(matchedProduct.Unit_Price)   // Fix A\n      };\n      break;\n    case 'Delivery_Tracking':\n      data = {\n        product_name:  matchedProduct.Product_Name,\n        order_id:      matchedDelivery ? matchedDelivery.Order_ID      : null,\n        customer_name: matchedDelivery ? matchedDelivery.Customer_Name : null,\n        quantity:      matchedDelivery ? matchedDelivery.Quantity       : null,\n        delivery_eta:  matchedDelivery ? futureDate(matchedDelivery.Delivery_ETA) : null,\n        status:        matchedDelivery ? matchedDelivery.Status         : null\n      };\n      break;\n  }\n}\n\nreturn [{\n  json: {\n    route,\n    intent,\n    language:          item.language || 'en',\n    data,\n    sender_first_name: senderFirstName,\n    senderEmail:       item.senderEmail,\n    senderName:        item.senderName,\n    originalSubject:   item.originalSubject,\n    internetMessageId: item.internetMessageId,\n    messageId:         item.messageId,\n    strippedBody:      item.strippedBody,\n    confidence:        item.confidence,\n    match_tier:        item.match_tier\n  }\n}];\n"
       },
       "id": "node-8",
       "name": "Compose Data Packet",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2080,
-        400
+        2430,
+        300
       ]
     },
     {
@@ -321,8 +307,8 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.4,
       "position": [
-        2310,
-        400
+        2650,
+        300
       ]
     },
     {
@@ -338,8 +324,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [
-        2330,
-        600
+        2670,
+        500
       ],
       "credentials": {
         "openAiApi": {
@@ -357,8 +343,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2540,
-        400
+        2870,
+        300
       ]
     },
     {
@@ -370,8 +356,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2760,
-        400
+        3090,
+        300
       ]
     },
     {
@@ -389,8 +375,8 @@
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
       "position": [
-        2980,
-        400
+        3310,
+        300
       ],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
@@ -408,27 +394,27 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3200,
-        400
+        3530,
+        300
       ]
     },
     {
       "parameters": {
         "resource": "message",
         "operation": "update",
-        "messageId": "={{ $('Thread Stripper').first().json.messageId }}",
+        "messageId": "={{ $json.messageId }}",
         "updateFields": {
           "isRead": true
         }
       },
+      "id": "node-14-early",
+      "name": "Mark Email Read Early",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
       "position": [
-        3420,
-        400
+        890,
+        300
       ],
-      "name": "Mark Email Read",
-      "id": "node-14-mark-email-read",
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "PLACEHOLDER",
@@ -461,6 +447,39 @@
       ]
     },
     "Thread Stripper": {
+      "main": [
+        [
+          {
+            "node": "Mark Email Read Early",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Email Read Early": {
+      "main": [
+        [
+          {
+            "node": "Load Inventory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Inventory": {
+      "main": [
+        [
+          {
+            "node": "Load Deliveries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Deliveries": {
       "main": [
         [
           {
@@ -504,29 +523,6 @@
         ],
         [
           {
-            "node": "Load Inventory",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Load Deliveries",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Load Inventory",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Load Inventory": {
-      "main": [
-        [
-          {
             "node": "Matcher",
             "type": "main",
             "index": 0
@@ -534,18 +530,7 @@
         ]
       ]
     },
-    "Load Deliveries": {
-      "main": [
-        [
-          {
-            "node": "Matcher",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Matcher": {
+    "Unknown Packet": {
       "main": [
         [
           {
@@ -556,7 +541,7 @@
         ]
       ]
     },
-    "Unknown Packet": {
+    "Matcher": {
       "main": [
         [
           {
@@ -639,17 +624,6 @@
           {
             "node": "Draft Reply Stage 2",
             "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Mark Processed": {
-      "main": [
-        [
-          {
-            "node": "Mark Email Read",
-            "type": "main",
             "index": 0
           }
         ]
