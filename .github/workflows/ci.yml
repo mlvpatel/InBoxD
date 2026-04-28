@@ -6,28 +6,85 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
+    name: Validate and test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0634a2670c59f64b4a01f0f96f84700a4088b9f0 # v2.12.0
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: "20"
 
-      - name: Validate cloud workflow JSON
-        run: python3 -c "import json; json.load(open('workflows/cloud/workflow.json')); print('Cloud workflow JSON: VALID')"
+      - name: Install Python deps for tests
+        run: python3 -m pip install --no-cache-dir -r scripts/requirements.txt || true
 
-      - name: Validate local workflow JSON
-        run: python3 -c "import json; json.load(open('workflows/local/workflow.json')); print('Local workflow JSON: VALID')"
+      - name: Validate workflow JSON (cloud)
+        run: |
+          python3 -c "import json; json.load(open('workflows/cloud/workflow.json')); print('cloud: VALID')"
+
+      - name: Validate workflow JSON (local)
+        run: |
+          python3 -c "import json; json.load(open('workflows/local/workflow.json')); print('local: VALID')"
+
+      - name: Run scrub.js unit tests
+        run: node scripts/test_scrub.js
 
       - name: Run prompt sync check
         run: python3 scripts/check_prompt_sync.py
+
+      - name: Verify project rules (last_updated, style)
+        run: |
+          python3 - <<'PY'
+          import os, re, sys, glob
+          fail = 0
+          for path in glob.glob('**/*.md', recursive=True):
+              if any(seg in path for seg in ('.git', 'node_modules', '.venv')):
+                  continue
+              if os.path.basename(path) == 'README.md':
+                  continue
+              with open(path, encoding='utf-8') as f:
+                  lines = f.readlines()
+              # Skip YAML frontmatter if present (GitHub issue templates).
+              probe = lines[:]
+              if probe and probe[0].strip() == '---':
+                  end = next((i for i, l in enumerate(probe[1:], start=1) if l.strip() == '---'), None)
+                  if end is not None:
+                      probe = probe[end + 1:]
+                      while probe and probe[0].strip() == '':
+                          probe = probe[1:]
+              target = probe[1] if len(probe) >= 2 else ''
+              if not target.startswith('last_updated:'):
+                  print(f'MISSING last_updated after title: {path}'); fail += 1
+              content = ''.join(lines)
+              if re.search(r'[\u2018\u2019\u201C\u201D]', content):
+                  print(f'SMART QUOTES: {path}'); fail += 1
+              if re.search(r'[\u2013\u2014]', content):
+                  print(f'EN/EM DASH: {path}'); fail += 1
+          sys.exit(1 if fail else 0)
+          PY
